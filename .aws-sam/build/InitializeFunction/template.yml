@@ -1,0 +1,118 @@
+# This is the SAM template that represents the architecture of your serverless application
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-template-basics.html
+
+# The AWSTemplateFormatVersion identifies the capabilities of the template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  GLSTransport
+
+# Transform section specifies one or more macros that AWS CloudFormation uses to process your template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
+Transform:
+- AWS::Serverless-2016-10-31
+
+# Parameters of the application 
+Parameters:
+  ContextId:
+    Type: String
+    Description: Context in which to listen for shipping label requests.
+    MinLength: '1'
+  ApiKey:
+    Type: String
+    Description: Access token to the context in Thetis IMS.
+    MinLength: '1'
+    
+# Resources declares the AWS resources that you want to include in the stack
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
+Resources:  
+
+  # Function that will run when a shipping label is requested by Thetis IMS
+  ShippingLabelRequestHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Function that runs when a shipping label is requested by Thetis IMS
+      Runtime: nodejs12.x
+      Handler: src/handlers/gls-transport.shippingLabelRequestHandler
+      Events:
+        Request:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+              - public.thetis-ims.com
+              detail-type:
+              - shippingLabelRequest
+              detail:
+                carrierName:
+                - GLS
+                contextId:
+                - Ref: ContextId
+      MemorySize: 128
+      Timeout: 100
+      Environment:
+        Variables:
+          ApiKey:
+            Ref: ApiKey
+          ContextId:
+            Ref: ContextId
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn:
+          Fn::GetAtt:
+          - DeadLetterQueue
+          - Arn
+  
+  # Initialisation of GLS integration in context        
+  InitResource:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - InitializeFunction
+        - Arn
+      Version: 1
+  InitializeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/gls-transport.initializer
+      Runtime: nodejs12.x
+      MemorySize: 2048
+      Timeout: 30
+      Environment:
+        Variables:
+          ApiKey:
+            Ref: ApiKey
+        
+  # Our standard monitoring setup      
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties: {}
+  Alarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm when any message is moved to the dead letter queue.
+      AlarmActions:
+      - Ref: IncidentTopic
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: ApproximateNumberOfMessagesVisible
+      Period: 60
+      Namespace: AWS/SQS
+      Threshold: '0'
+      Unit: Count
+      Dimensions:
+      - Name: QueueName
+        Value:
+          Fn::GetAtt:
+          - DeadLetterQueue
+          - QueueName
+      TreatMissingData: notBreaching
+      Statistic: Maximum
+  IncidentTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+      - Endpoint: devops@thetis-apps.com
+        Protocol: email
+      DisplayName: Incidents to be handled by Thetis Devops.

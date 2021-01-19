@@ -1,0 +1,20 @@
+{
+    "version": "0",
+    "id": "294cf01f-9f86-9e93-1ab4-616f0f04ce96",
+    "detail-type": "shippingLabelRequest",
+    "source": "public.thetis-ims.com",
+    "account": "170069103691",
+    "time": "2020-04-28T07:27:24Z",
+    "region": "eu-west-1",
+    "resources": [],
+    "detail": {
+        "subscriberId": "379",
+        "eventId": "8a8fc9a5-924e-46f8-a31a-51ab02e28968",
+        "carrierName": "GLS",
+        "shipmentId": 33010792,
+        "contextId": "550",
+        "eventType": "shippingLabelRequest",
+        "carrierId": 28256060,
+        "userId": 3186879
+    }
+}
