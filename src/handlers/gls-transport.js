@@ -6,7 +6,6 @@ var { DateTime } = require('luxon');
 
 var AWS = require('aws-sdk');
 AWS.config.update({region:'eu-west-1'});
-var ssm = new AWS.SSM();
 
 function createGLSAddress(address, contactPerson) {
 	var glsAddress = new Object(); 
@@ -26,28 +25,19 @@ function createGLSAddress(address, contactPerson) {
 
 exports.initializer = async (event, context) => {
 	
-} 
 
-/**
- * A Lambda function that get shipping labels for parcels from GLS.
- */
-exports.shippingLabelRequestHandler = async (event, context) => {
+}
+
+async function getIMS() {
 	
     const authUrl = "https://auth.thetis-ims.com/oauth2/";
     const apiUrl = "https://api.thetis-ims.com/2/";
-    const glsUrl = "https://api.gls.dk/ws/DK/V1/";
-    
-    console.info(JSON.stringify(event));
 
-    var apiKey = process.env.ApiKey;
-    var contextId = process.env.ContextId;
-    var detail = event.detail;
-    var shipmentId = detail.shipmentId;
-
-	var clientId = await ssm.getParameter({ Name: 'ThetisClientId', WithDecryption: true }).promise();   
-	var clientSecret = await ssm.getParameter({ Name: 'ThetisClientSecret', WithDecryption: true }).promise();   
+	var clientId = process.env.ClientId;   
+	var clientSecret = process.env.ClientSecret; 
+	var apiKey = process.env.ApiKey;  
 	
-    let data = clientId.Parameter.Value + ":" + clientSecret.Parameter.Value;
+    let data = clientId + ":" + clientSecret;
 	let base64data = Buffer.from(data, 'UTF-8').toString('base64');	
 	
 	var imsAuth = axios.create({
@@ -74,7 +64,24 @@ exports.shippingLabelRequestHandler = async (event, context) => {
 	    	return Promise.reject(error);
 		});
 
-    response = await ims.get("contexts/" + contextId);
+}
+
+/**
+ * A Lambda function that get shipping labels for parcels from GLS.
+ */
+exports.shippingLabelRequestHandler = async (event, context) => {
+	
+    const glsUrl = "https://api.gls.dk/ws/DK/V1/";
+    
+    console.info(JSON.stringify(event));
+
+    var detail = event.detail;
+    var shipmentId = detail.shipmentId;
+    var contextId = detail.contextId;
+
+	let ims = await getIMS();
+
+    let response = await ims.get("contexts/" + contextId);
     var context = response.data;
 
     var dataDocument = JSON.parse(context.dataDocument);

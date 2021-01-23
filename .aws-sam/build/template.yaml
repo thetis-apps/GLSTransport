@@ -5,12 +5,14 @@ Transform:
 Parameters:
   ContextId:
     Type: String
-    Description: Context in which to listen for shipping label requests.
+    Description: Context that this application is handling events for.
     MinLength: '1'
+  ClientId:
+    Type: AWS::SSM::Parameter::Value<String>
+  ClientSecret:
+    Type: AWS::SSM::Parameter::Value<String>
   ApiKey:
     Type: String
-    Description: Access token to the context in Thetis IMS.
-    MinLength: '1'
 Resources:
   ShippingLabelRequestHandler:
     Type: AWS::Serverless::Function
@@ -19,6 +21,14 @@ Resources:
         IMS
       Runtime: nodejs12.x
       Handler: src/handlers/gls-transport.shippingLabelRequestHandler
+      Environment:
+        Variables:
+          ClientId:
+            Ref: ClientId
+          ClientSecret:
+            Ref: ClientSecret
+          ApiKey:
+            Ref: ApiKey
       Events:
         Request:
           Type: EventBridgeRule
@@ -35,12 +45,6 @@ Resources:
                 - Ref: ContextId
       MemorySize: 128
       Timeout: 100
-      Environment:
-        Variables:
-          ApiKey:
-            Ref: ApiKey
-          ContextId:
-            Ref: ContextId
       DeadLetterQueue:
         Type: SQS
         TargetArn:
@@ -63,10 +67,6 @@ Resources:
       Runtime: nodejs12.x
       MemorySize: 2048
       Timeout: 30
-      Environment:
-        Variables:
-          ApiKey:
-            Ref: ApiKey
       CodeUri: InitializeFunction
   DeadLetterQueue:
     Type: AWS::SQS::Queue

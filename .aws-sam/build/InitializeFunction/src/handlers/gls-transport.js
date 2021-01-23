@@ -6,7 +6,6 @@ var { DateTime } = require('luxon');
 
 var AWS = require('aws-sdk');
 AWS.config.update({region:'eu-west-1'});
-var ssm = new AWS.SSM();
 
 function createGLSAddress(address, contactPerson) {
 	var glsAddress = new Object(); 
@@ -39,15 +38,15 @@ exports.shippingLabelRequestHandler = async (event, context) => {
     
     console.info(JSON.stringify(event));
 
-    var apiKey = process.env.ApiKey;
-    var contextId = process.env.ContextId;
     var detail = event.detail;
     var shipmentId = detail.shipmentId;
+    var contextId = detail.contextId;
 
-	var clientId = await ssm.getParameter({ Name: 'ThetisClientId', WithDecryption: true }).promise();   
-	var clientSecret = await ssm.getParameter({ Name: 'ThetisClientSecret', WithDecryption: true }).promise();   
+	var clientId = process.env.ClientId;   
+	var clientSecret = process.env.ClientSecret; 
+	var apiKey = process.env.ApiKey;  
 	
-    let data = clientId.Parameter.Value + ":" + clientSecret.Parameter.Value;
+    let data = clientId + ":" + clientSecret;
 	let base64data = Buffer.from(data, 'UTF-8').toString('base64');	
 	
 	var imsAuth = axios.create({
