@@ -62,6 +62,7 @@ Resources:
       Version: 1
   InitializeFunction:
     Type: AWS::Serverless::Function
+    DeletionPolicy: Delete
     Properties:
       Handler: src/handlers/gls-transport.initializer
       Runtime: nodejs12.x

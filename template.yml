@@ -78,11 +78,13 @@ Resources:
       Version: 1
   InitializeFunction:
     Type: AWS::Serverless::Function
+    DeletionPolicy: Delete
     Properties:
       Handler: src/handlers/gls-transport.initializer
       Runtime: nodejs12.x
       MemorySize: 2048
       Timeout: 30
+    
 
   # Our standard monitoring setup      
   DeadLetterQueue:

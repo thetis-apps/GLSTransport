@@ -23,24 +23,54 @@ function createGLSAddress(address, contactPerson) {
 	return glsAddress;
 }
 
-exports.initializer = async (event, context) => {
-	
-} 
-
 /**
- * A Lambda function that get shipping labels for parcels from GLS.
+ * Send a response to CloudFormation regarding progress in creating resource.
  */
-exports.shippingLabelRequestHandler = async (event, context) => {
+function sendResponse(input, context, responseStatus, reason) {
+
+	let responseUrl = input.ResponseURL;
+
+	let output = new Object();
+	output.Status = responseStatus;
+	output.PhysicalResourceId = "StaticFiles";
+	output.StackId = input.StackId;
+	output.RequestId = input.RequestId;
+	output.LogicalResourceId = input.LogicalResourceId;
+	output.Reason = reason;
+	axios.put(responseUrl, output);
+}
+
+exports.initializer = async (input, context) => {
+	
+	let ims = getIMS();
+	
+	try {
+		let requestType = input.RequestType;
+		if (requestType == "Create") {
+			let carrier = new Object();
+			carrier.carrierName = "GLS";
+		    var setup = new Object();
+			setup.userName = '2080060960';
+			setup.password = 'API1234';
+			setup.contactId = '208a144Uoo';
+			setup.customerNumber = '2080060960';
+			let dataDocument = new Object();
+			dataDocument.GLSTransport = setup;
+			carrier.dataDocument = JSON.stringify(dataDocument);
+			await ims.post("carriers", carrier);
+		}
+		sendResponse(input, context, "SUCCESS", null);
+
+	} catch (error) {
+		sendResponse(input, context, "SUCCESS", error);
+	}
+
+}
+
+async function getIMS() {
 	
     const authUrl = "https://auth.thetis-ims.com/oauth2/";
     const apiUrl = "https://api.thetis-ims.com/2/";
-    const glsUrl = "https://api.gls.dk/ws/DK/V1/";
-    
-    console.info(JSON.stringify(event));
-
-    var detail = event.detail;
-    var shipmentId = detail.shipmentId;
-    var contextId = detail.contextId;
 
 	var clientId = process.env.ClientId;   
 	var clientSecret = process.env.ClientSecret; 
@@ -72,11 +102,76 @@ exports.shippingLabelRequestHandler = async (event, context) => {
 			}
 	    	return Promise.reject(error);
 		});
+	
+	return ims;
+}
 
-    response = await ims.get("contexts/" + contextId);
-    var context = response.data;
+async function getGLS(ims, eventId) {
+ 
+    const glsUrl = "https://api.gls.dk/ws/DK/V1/";
+    
+    var gls = axios.create({
+		baseURL: glsUrl
+	});
+	
+	gls.interceptors.response.use(function (response) {
+			console.log("SUCCESS " + JSON.stringify(response.data));
+ 	    	return response;
+		}, function (error) {
+			if (error.response) {
+				console.log("FAILURE " + error.response.status + " - " + JSON.stringify(error.response.data));
+				var message = new Object
+				message.time = Date.now();
+				message.source = "GLSTransport";
+				message.messageType = "ERROR";
+				message.messageText = error.response.data.Message;
+				ims.post("events/" + eventId + "/messages", message);
+			}
+	    	return Promise.reject(error);
+		});
 
-    var dataDocument = JSON.parse(context.dataDocument);
+	return gls;
+}
+
+function lookupCarrier(carriers, carrierName) {
+	let i = 0;
+    let found = false;
+    while (!found && i < carriers.length) {
+    	let carrier = carriers[i];
+    	if (carrier.carrierName == carrierName) {
+    		found = true;
+    	} else {
+    		i++;
+    	}	
+    }
+    
+    if (!found) {
+    	throw new Error('No carrier by the name ' + carrierName);
+    }
+
+	return carriers[i];
+}
+
+/**
+ * A Lambda function that get shipping labels for parcels from GLS.
+ */
+exports.shippingLabelRequestHandler = async (event, context) => {
+	
+    console.info(JSON.stringify(event));
+
+    var detail = event.detail;
+    var shipmentId = detail.shipmentId;
+    var contextId = detail.contextId;
+
+	let ims = await getIMS();
+	
+	let gls = await getGLS(ims, detail.eventId);
+
+    let response = await ims.get("carriers");
+    var carriers = response.data;
+    
+    let carrier = lookupCarrier(carriers, 'GLS');
+    var dataDocument = JSON.parse(carrier.dataDocument);
     var setup = dataDocument.GLSTransport;
     
     response = await ims.get("shipments/" + shipmentId);
@@ -153,26 +248,6 @@ exports.shippingLabelRequestHandler = async (event, context) => {
 	}
 	glsShipment.services = glsServices;
 
-    var gls = axios.create({
-    		baseURL: glsUrl
-    	});
-	
-	gls.interceptors.response.use(function (response) {
-			console.log("SUCCESS " + JSON.stringify(response.data));
- 	    	return response;
-		}, function (error) {
-			if (error.response) {
-				console.log("FAILURE " + error.response.status + " - " + JSON.stringify(error.response.data));
-				var message = new Object
-				message.time = Date.now();
-				message.source = "GLSTransport";
-				message.messageType = "ERROR";
-				message.messageText = error.response.data.Message;
-				ims.post("events/" + detail.eventId + "/messages", message);
-			}
-	    	return Promise.reject(error);
-		});
-    
     response = await gls.post("CreateShipment", glsShipment);
     var glsResponse = response.data;
     
@@ -182,8 +257,14 @@ exports.shippingLabelRequestHandler = async (event, context) => {
 	await ims.post("shipments/"+ shipmentId + "/attachments", shippingLabel);
 
 	await ims.put("shipments/" + shipmentId + "/consignmentId", glsResponse.consignmentId);
+
+	for (let i = 0; i < glsResponse.parcels.length; i++) {
+		let shippingContainer = shippingContainers[i];
+		let parcel = parcels[i];
+		ims.put("shippingContainers/" + shippingContainer.id + "/trackingNumber", parcel.parcelNumber);
+	}
 	
-	var message = new Object
+	var message = new Object();
 	message.time = Date.now();
 	message.source = "GLSTransport";
 	message.messageType = "INFO";
