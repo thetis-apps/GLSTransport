@@ -68,6 +68,14 @@ Resources:
       Runtime: nodejs12.x
       MemorySize: 2048
       Timeout: 30
+      Environment:
+        Variables:
+          ClientId:
+            Ref: ClientId
+          ClientSecret:
+            Ref: ClientSecret
+          ApiKey:
+            Ref: ApiKey
       CodeUri: InitializeFunction
   DeadLetterQueue:
     Type: AWS::SQS::Queue

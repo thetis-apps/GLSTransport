@@ -1,3 +1,19 @@
+/**
+ * Copyright 2021 Thetis Apps Aps
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * 
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * 
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 const axios = require('axios');
 
 const countryCodeLookup = require('country-code-lookup');
@@ -42,9 +58,8 @@ async function sendResponse(input, context, responseStatus, reason) {
 
 exports.initializer = async (input, context) => {
 	
-	let ims = getIMS();
-	
 	try {
+		let ims = await getIMS();
 		let requestType = input.RequestType;
 		if (requestType == "Create") {
 			let carrier = new Object();
@@ -59,10 +74,10 @@ exports.initializer = async (input, context) => {
 			carrier.dataDocument = JSON.stringify(dataDocument);
 			await ims.post("carriers", carrier);
 		}
-		await sendResponse(input, context, "SUCCESS", null);
+		await sendResponse(input, context, "SUCCESS", "OK");
 
 	} catch (error) {
-		await sendResponse(input, context, "SUCCESS", error);
+		await sendResponse(input, context, "SUCCESS", JSON.stringify(error));
 	}
 
 }
@@ -90,42 +105,41 @@ async function getIMS() {
     
     var ims = axios.create({
     		baseURL: apiUrl,
-    		headers: { "Authorization": token, "x-api-key": apiKey }
+    		headers: { "Authorization": token, "x-api-key": apiKey, "Content-Type": "application/json" }
     	});
 	
+
 	ims.interceptors.response.use(function (response) {
 			console.log("SUCCESS " + JSON.stringify(response.data));
  	    	return response;
 		}, function (error) {
+			console.log(JSON.stringify(error));
 			if (error.response) {
 				console.log("FAILURE " + error.response.status + " - " + JSON.stringify(error.response.data));
 			}
 	    	return Promise.reject(error);
 		});
-	
+
 	return ims;
 }
 
-async function getGLS(ims, eventId) {
+async function getGLS() {
  
     const glsUrl = "https://api.gls.dk/ws/DK/V1/";
     
     var gls = axios.create({
-		baseURL: glsUrl
+		baseURL: glsUrl,
+		validateStatus: function (status) {
+		    return status >= 200 && status < 300 || status == 400; // default
+		}
 	});
 	
 	gls.interceptors.response.use(function (response) {
-			console.log("SUCCESS " + JSON.stringify(response.data));
+			console.log("SUCCESS Status: " + response.status + " Body: " + JSON.stringify(response.data));
  	    	return response;
 		}, function (error) {
 			if (error.response) {
 				console.log("FAILURE " + error.response.status + " - " + JSON.stringify(error.response.data));
-				var message = new Object
-				message.time = Date.now();
-				message.source = "GLSTransport";
-				message.messageType = "ERROR";
-				message.messageText = error.response.data.Message;
-				ims.post("events/" + eventId + "/messages", message);
 			}
 	    	return Promise.reject(error);
 		});
@@ -165,7 +179,7 @@ exports.shippingLabelRequestHandler = async (event, context) => {
 
 	let ims = await getIMS();
 	
-	let gls = await getGLS(ims, detail.eventId);
+	let gls = await getGLS();
 
     let response = await ims.get("carriers");
     var carriers = response.data;
@@ -175,9 +189,9 @@ exports.shippingLabelRequestHandler = async (event, context) => {
     var setup = dataDocument.GLSTransport;
     
     response = await ims.get("shipments/" + shipmentId);
-    var shipment = response.data;
+    let shipment = response.data;
     
-	var glsShipment = new Object();
+	let glsShipment = new Object();
 	
 	glsShipment.userName = setup.userName;
 	glsShipment.password = setup.password;
@@ -187,28 +201,28 @@ exports.shippingLabelRequestHandler = async (event, context) => {
 	glsShipment.reference = shipment.shipmentNumber;
 	
 	let i = 1;
-	var parcels = [];
-	var shippingContainers = [];
+	let parcels = [];
+	let shippingContainers = [];
 	shippingContainers = shipment.shippingContainers;
 	shippingContainers.forEach(function(shippingContainer) {
-    		var glsParcel = new Object();
-    		glsParcel.reference = shipment.shipmentNumber + " #" + i;
-    		glsParcel.weight = shippingContainer.grossWeight;
-    		parcels.push(glsParcel);
-    		i++;
-    	});
+		let glsParcel = new Object();
+		glsParcel.reference = shipment.shipmentNumber + " #" + i;
+		glsParcel.weight = shippingContainer.grossWeight;
+		parcels.push(glsParcel);
+		i++;
+	});
 	
 	glsShipment.parcels = parcels;
 	
-	var glsAddresses = new Object();
+	let glsAddresses = new Object();
 	
-	var contactPerson = shipment.contactPerson;
+	let contactPerson = shipment.contactPerson;
 	
-	var glsDeliveryAddress = createGLSAddress(shipment.deliveryAddress, contactPerson);
+	let glsDeliveryAddress = createGLSAddress(shipment.deliveryAddress, contactPerson);
 	
-	var senderAddress;
-	var senderContactPerson;
-    var sellerId = shipment.sellerId;
+	let senderAddress;
+	let senderContactPerson;
+    let sellerId = shipment.sellerId;
 	if (sellerId != null) {
 	    response = await ims.get("sellers/" + sellerId);
 		senderAddress = response.data.address;
@@ -217,21 +231,21 @@ exports.shippingLabelRequestHandler = async (event, context) => {
 		senderAddress = context.address;
 		senderContactPerson = context.contactPerson;
 	}
-	var glsAlternativeShipper = createGLSAddress(senderAddress, senderContactPerson);
+	let glsAlternativeShipper = createGLSAddress(senderAddress, senderContactPerson);
 	
 	glsAddresses.delivery = glsDeliveryAddress;
 	glsAddresses.alternativeShipper = glsAlternativeShipper;
 	
 	glsShipment.addresses = glsAddresses;
 	
-	var glsServices = new Object();
+	let glsServices = new Object();
 	if (shipment.pickUpPointId != null) {
 		glsServices.shopDelivery = shipment.getPickUpPointId;
 	}	
 	if (contactPerson != null) {
 		glsServices.setNotificationEmail = contactPerson.getEmail;
 	}
-	var notesOnDelivery = shipment.notesOnDelivery;
+	let notesOnDelivery = shipment.notesOnDelivery;
 	if (notesOnDelivery != null) {
 		if (notesOnDelivery.startsWith("Deposit")) {
 			glsServices.deposit = notesOnDelivery.substring(7);
@@ -249,27 +263,47 @@ exports.shippingLabelRequestHandler = async (event, context) => {
 	glsShipment.services = glsServices;
 
     response = await gls.post("CreateShipment", glsShipment);
-    var glsResponse = response.data;
     
-	var shippingLabel = new Object();
-	shippingLabel.base64EncodedContent = glsResponse.PDF;
-	shippingLabel.fileName = "SHIPPING_LABEL_" + shipmentId + ".pdf";
-	await ims.post("shipments/"+ shipmentId + "/attachments", shippingLabel);
+	if (response.status == 400) {
+		
+		let messageText = "";
+		let errorResponse = response.data;
+		for (let field in errorResponse.ModelState) {
+			messageText = messageText + errorResponse.ModelState[field];
+		}
+		
+		let message = new Object();
+		message.time = Date.now();
+		message.source = "GLSTransport";
+		message.messageType = "ERROR";
+		message.messageText = messageText;
+		await ims.post("events/" + detail.eventId + "/messages", message);
+		
+	} else {
 
-	await ims.put("shipments/" + shipmentId + "/consignmentId", glsResponse.consignmentId);
-
-	for (let i = 0; i < glsResponse.parcels.length; i++) {
-		let shippingContainer = shippingContainers[i];
-		let parcel = parcels[i];
-		ims.put("shippingContainers/" + shippingContainer.id + "/trackingNumber", parcel.parcelNumber);
-	}
+	    let glsResponse = response.data;
+		let shippingLabel = new Object();
+		shippingLabel.base64EncodedContent = glsResponse.PDF;
+		shippingLabel.fileName = "SHIPPING_LABEL_" + shipmentId + ".pdf";
+		await ims.post("shipments/"+ shipmentId + "/attachments", shippingLabel);
 	
-	var message = new Object();
-	message.time = Date.now();
-	message.source = "GLSTransport";
-	message.messageType = "INFO";
-	message.messageText = "Labels are ready";
-	await ims.post("events/" + detail.eventId + "/messages", message);
+		await ims.put("shipments/" + shipmentId + "/consignmentId", glsResponse.consignmentId);
+	
+		let parcels = glsResponse.Parcels;
+		for (let i = 0; i < parcels.length; i++) {
+			let shippingContainer = shippingContainers[i];
+			let parcel = parcels[i];
+			ims.put("shippingContainers/" + shippingContainer.id + "/trackingNumber", parcel.parcelNumber);
+		}
+		
+		let message = new Object();
+		message.time = Date.now();
+		message.source = "GLSTransport";
+		message.messageType = "INFO";
+		message.messageText = "Labels are ready";
+		await ims.post("events/" + detail.eventId + "/messages", message);
+
+	}
 
 	return "done";
 
