@@ -2,6 +2,19 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: GLSTransport
 Transform:
 - AWS::Serverless-2016-10-31
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: thetis-ims-gls-transport
+    Description: Application for integrating Thetis IMS with the freight carrier GLS.
+    Author: thetis-apps
+    SpdxLicenseId: Apache-2.0
+    LicenseUrl: ../../LICENSE.txt
+    ReadmeUrl: ../../README.md
+    Labels:
+    - thetis-ims
+    HomePageUrl: https://github.com/thetis-apps/GLSTransport
+    SemanticVersion: '0.0.1'
+    SourceCodeUrl: https://github.com/thetis-apps/GLSTransport
 Parameters:
   ContextId:
     Type: String
@@ -9,8 +22,10 @@ Parameters:
     MinLength: '1'
   ClientId:
     Type: AWS::SSM::Parameter::Value<String>
+    Default: ThetisClientId
   ClientSecret:
     Type: AWS::SSM::Parameter::Value<String>
+    Default: ThetisClientSecret
   ApiKey:
     Type: String
 Resources:
@@ -37,7 +52,7 @@ Resources:
               source:
               - public.thetis-ims.com
               detail-type:
-              - shippingLabelRequest
+              - packingCompleted
               detail:
                 carrierName:
                 - GLS

@@ -1,32 +1,20 @@
-# This is the SAM template that represents the architecture of your serverless application
-# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-template-basics.html
-
-# The AWSTemplateFormatVersion identifies the capabilities of the template
-# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html
 AWSTemplateFormatVersion: 2010-09-09
-Description: >-
-  GLSTransport
-
-# Transform section specifies one or more macros that AWS CloudFormation uses to process your template
-# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
+Description: GLSTransport
 Transform:
 - AWS::Serverless-2016-10-31
-
-# Metadata to use for the publishing to the SAR
 Metadata:
   AWS::ServerlessRepo::Application:
     Name: thetis-ims-gls-transport
     Description: Application for integrating Thetis IMS with the freight carrier GLS.
     Author: thetis-apps
     SpdxLicenseId: Apache-2.0
-    LicenseUrl: LICENSE.txt
-    ReadmeUrl: README.md
-    Labels: ['thetis-ims']
+    LicenseUrl: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/4612b8d5aa75b9b9936c9b7b9e6c7e82
+    ReadmeUrl: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/5800ec7fb180184281de2f231fb544f7
+    Labels:
+    - thetis-ims
     HomePageUrl: https://github.com/thetis-apps/GLSTransport
-    SemanticVersion: 0.0.1
+    SemanticVersion: '0.0.1'
     SourceCodeUrl: https://github.com/thetis-apps/GLSTransport
-
-# Parameters of the application 
 Parameters:
   ContextId:
     Type: String
@@ -40,16 +28,12 @@ Parameters:
     Default: ThetisClientSecret
   ApiKey:
     Type: String
-
-# Resources declares the AWS resources that you want to include in the stack
-# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
-Resources:  
-
-  # Function that will run when a shipping label is requested by Thetis IMS
+Resources:
   ShippingLabelRequestHandler:
     Type: AWS::Serverless::Function
     Properties:
-      Description: Function that runs when a shipping label is requested by Thetis IMS
+      Description: Function that runs when a shipping label is requested by Thetis
+        IMS
       Runtime: nodejs12.x
       Handler: src/handlers/gls-transport.shippingLabelRequestHandler
       Environment:
@@ -82,8 +66,7 @@ Resources:
           Fn::GetAtt:
           - DeadLetterQueue
           - Arn
-  
-  # Initialisation of GLS integration in context        
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/0df3dfecf90ea80dd1c4fa3b0b720878
   InitResource:
     Type: AWS::CloudFormation::CustomResource
     Properties:
@@ -108,9 +91,7 @@ Resources:
             Ref: ClientSecret
           ApiKey:
             Ref: ApiKey
-    
-
-  # Our standard monitoring setup      
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/0df3dfecf90ea80dd1c4fa3b0b720878
   DeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties: {}
