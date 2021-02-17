@@ -1,4 +1,14 @@
-# GLSTransport
+# Introduction
+
+# Installation
+
+You may install the application from the Serverless Application Repository. It is registered under the name thetis-ims-gls-transport.
+
+## Parameters
+
+# Configuration
+
+# Shipment options
 
 ## Special services
 
